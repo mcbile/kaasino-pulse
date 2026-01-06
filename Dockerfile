@@ -7,14 +7,14 @@ WORKDIR /app
 RUN apk add --no-cache git ca-certificates
 
 # Copy go mod files
-COPY go.mod go.sum ./
+COPY go.mod ./
 RUN go mod download
 
 # Copy source
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /pulse-collector ./cmd/collector
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /pulse-collector .
 
 # Runtime stage
 FROM alpine:3.19
