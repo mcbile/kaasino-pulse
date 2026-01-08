@@ -1,8 +1,8 @@
 /**
- * KAASINO PULSE - React Integration
- * 
+ * PRODUCT PULSE - React Integration
+ *
  * Usage:
- *   import { PulseProvider, usePulse } from '@kaasino/pulse-sdk/react'
+ *   import { PulseProvider, usePulse } from '@product/pulse-sdk/react'
  *   
  *   // In App.tsx
  *   <PulseProvider config={{ endpoint: '...', siteId: '...' }}>

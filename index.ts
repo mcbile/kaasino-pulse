@@ -1,13 +1,13 @@
 /**
- * KAASINO PULSE SDK
+ * PRODUCT PULSE SDK
  * Lightweight performance monitoring (~2.5KB gzipped)
- * 
+ *
  * Usage:
- *   import { Pulse } from '@kaasino/pulse-sdk'
- *   
+ *   import { Pulse } from '@product/pulse-sdk'
+ *
  *   Pulse.init({
- *     endpoint: 'https://pulse.kaasino.com/collect',
- *     siteId: 'kaasino-prod'
+ *     endpoint: 'https://pulse.product.com/collect',
+ *     siteId: 'product-prod'
  *   })
  */
 

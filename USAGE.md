@@ -1,18 +1,18 @@
-# Kaasino Pulse SDK - Usage Examples
+# Product Pulse SDK - Usage Examples
 
 ## Basic Setup
 
 ```typescript
 // main.ts or entry point
-import { Pulse } from '@kaasino/pulse-sdk'
+import { Pulse } from '@product/pulse-sdk'
 
 Pulse.init({
-  endpoint: 'https://pulse.kaasino.com/collect',
-  siteId: 'kaasino-prod',
+  endpoint: 'https://pulse.product.com/collect',
+  siteId: 'product-prod',
   debug: process.env.NODE_ENV === 'development',
-  
+
   // Optional: resolve player ID from your auth state
-  getPlayerId: () => window.__KAASINO__?.playerId ?? null,
+  getPlayerId: () => window.__PRODUCT__?.playerId ?? null,
 })
 ```
 
@@ -20,7 +20,7 @@ Pulse.init({
 
 ```tsx
 // App.tsx
-import { PulseProvider } from '@kaasino/pulse-sdk/react'
+import { PulseProvider } from '@product/pulse-sdk/react'
 import { useAuth } from './hooks/useAuth'
 
 function App() {
@@ -30,7 +30,7 @@ function App() {
     <PulseProvider 
       config={{
         endpoint: import.meta.env.VITE_PULSE_ENDPOINT,
-        siteId: 'kaasino-prod',
+        siteId: 'product-prod',
         getPlayerId: () => playerId,
       }}
     >
@@ -43,7 +43,7 @@ function App() {
 ## Tracking Custom Events
 
 ```typescript
-import { Pulse } from '@kaasino/pulse-sdk'
+import { Pulse } from '@product/pulse-sdk'
 
 // Track deposit flow timing
 const startDeposit = performance.now()
@@ -98,7 +98,7 @@ try {
 ## React Hooks
 
 ```tsx
-import { usePulse, useTrackClick, useRenderTime } from '@kaasino/pulse-sdk/react'
+import { usePulse, useTrackClick, useRenderTime } from '@product/pulse-sdk/react'
 
 function DepositModal() {
   // Auto-track render time
@@ -134,7 +134,7 @@ function DepositModal() {
 ## Track Async Operations
 
 ```tsx
-import { useTrackAsync } from '@kaasino/pulse-sdk/react'
+import { useTrackAsync } from '@product/pulse-sdk/react'
 
 function GameLobby() {
   const [games, setGames] = useState([])
@@ -158,7 +158,7 @@ function GameLobby() {
 ## Error Boundary
 
 ```tsx
-import { PulseErrorBoundary } from '@kaasino/pulse-sdk/react'
+import { PulseErrorBoundary } from '@product/pulse-sdk/react'
 
 function App() {
   return (
@@ -272,15 +272,15 @@ class GameSocket {
 ```typescript
 // Production: sample 10% of sessions
 Pulse.init({
-  endpoint: 'https://pulse.kaasino.com/collect',
-  siteId: 'kaasino-prod',
+  endpoint: 'https://pulse.product.com/collect',
+  siteId: 'product-prod',
   sampleRate: 0.1, // 10%
 })
 
 // Staging: capture everything
 Pulse.init({
-  endpoint: 'https://pulse-staging.kaasino.com/collect',
-  siteId: 'kaasino-staging',
+  endpoint: 'https://pulse-staging.product.com/collect',
+  siteId: 'product-staging',
   sampleRate: 1.0, // 100%
   debug: true,
 })

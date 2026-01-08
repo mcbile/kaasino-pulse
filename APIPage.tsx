@@ -6,21 +6,34 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
 } from 'recharts'
-import { Server, Clock, AlertTriangle, Activity } from 'lucide-react'
-import { useTimeRange } from '../context/TimeRangeContext'
-import { mockData } from '../api/client'
-import { MetricCard, Card, SectionHeader, StatusBadge, ProgressBar } from '../components/ui'
+import { Server, Clock, AlertTriangle, Activity, Loader2 } from 'lucide-react'
+import { useTimeRange } from './TimeRangeContext'
+import { useFilters } from './App'
+import { mockDataAPI } from './apiClient'
+import { MetricCard, Card, SectionHeader, StatusBadge } from './ui'
 
 export function APIPage() {
-  const { getStartTime } = useTimeRange()
+  const { range } = useTimeRange()
+  const { appliedBrand, appliedCountry } = useFilters()
 
-  const { data: apiData } = useQuery({
-    queryKey: ['api', getStartTime().toISOString()],
-    queryFn: () => Promise.resolve(mockData.apiPerformance),
+  const filters = {
+    brand: appliedBrand,
+    country: appliedCountry,
+    timeRange: range,
+  }
+
+  const { data: apiData, isLoading: apiLoading } = useQuery({
+    queryKey: ['api-performance', appliedBrand, appliedCountry, range],
+    queryFn: () => mockDataAPI.getAPIPerformance(filters),
   })
+
+  const { data: timeSeriesData, isLoading: tsLoading } = useQuery({
+    queryKey: ['api-timeseries', appliedBrand, appliedCountry, range],
+    queryFn: () => mockDataAPI.getAPITimeSeries(filters),
+  })
+
+  const isLoading = apiLoading || tsLoading
 
   // Totals
   const totalRequests = apiData?.reduce((sum, a) => sum + a.request_count, 0) ?? 0
@@ -29,14 +42,14 @@ export function APIPage() {
   const p95Latency = Math.max(...(apiData?.map(a => a.p95_duration_ms) ?? [0]))
   const errorRate = (totalErrors / totalRequests) * 100 || 0
 
-  const latencyTrend = mockData.generateTimeSeries(24, 150, 50)
-  const requestsTrend = mockData.generateTimeSeries(24, 500, 200)
-  const errorsTrend = mockData.generateTimeSeries(24, 0.3, 0.2)
+  const latencyTrend = timeSeriesData?.latency || []
+  const requestsTrend = timeSeriesData?.requests || []
+  const errorsTrend = timeSeriesData?.errors || []
 
   // By service
   const byService = apiData?.reduce((acc, a) => {
     if (!acc[a.service_name]) {
-      acc[a.service_name] = { requests: 0, errors: 0, latency: 0, endpoints: [] }
+      acc[a.service_name] = { requests: 0, errors: 0, latency: 0, endpoints: [] as typeof apiData }
     }
     acc[a.service_name].requests += a.request_count
     acc[a.service_name].errors += a.error_count
@@ -54,6 +67,14 @@ export function APIPage() {
     endpoints: data.endpoints,
   }))
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-theme-muted" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
@@ -65,6 +86,7 @@ export function APIPage() {
           trend={8.5}
           icon={<Activity size={20} />}
           status="neutral"
+          tooltip="Общее количество API запросов за выбранный период времени."
         />
         <MetricCard
           title="Error Rate"
@@ -73,6 +95,8 @@ export function APIPage() {
           trend={-0.3}
           icon={<AlertTriangle size={20} />}
           status={errorRate < 0.5 ? 'good' : errorRate < 2 ? 'warning' : 'critical'}
+          tooltip="Процент неуспешных запросов (4xx + 5xx ошибки) от общего числа."
+          thresholds={{ good: '<0.5%', warning: '0.5-2%', critical: '>2%' }}
         />
         <MetricCard
           title="Avg Latency"
@@ -81,6 +105,8 @@ export function APIPage() {
           trend={-2.1}
           icon={<Clock size={20} />}
           status={avgLatency < 200 ? 'good' : avgLatency < 500 ? 'warning' : 'critical'}
+          tooltip="Среднее время ответа API в миллисекундах."
+          thresholds={{ good: '<200ms', warning: '200-500ms', critical: '>500ms' }}
         />
         <MetricCard
           title="P95 Latency"
@@ -88,6 +114,8 @@ export function APIPage() {
           subtitle="95th percentile"
           icon={<Server size={20} />}
           status={p95Latency < 500 ? 'good' : p95Latency < 1000 ? 'warning' : 'critical'}
+          tooltip="95-й персентиль задержки — 95% запросов быстрее этого значения. Показывает 'хвост' медленных запросов."
+          thresholds={{ good: '<500ms', warning: '500ms-1s', critical: '>1s' }}
         />
       </div>
 
@@ -109,8 +137,8 @@ export function APIPage() {
                 <YAxis stroke="#6b7280" fontSize={10} width={40} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
@@ -145,8 +173,8 @@ export function APIPage() {
                 <YAxis stroke="#6b7280" fontSize={10} width={40} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
@@ -167,7 +195,7 @@ export function APIPage() {
 
         {/* Error Rate Trend */}
         <Card>
-          <SectionHeader title="Error Rate" subtitle="% of requests" />
+          <SectionHeader title="Error Rate" subtitle="Errors count" />
           <div className="h-48">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={errorsTrend}>
@@ -178,16 +206,16 @@ export function APIPage() {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="time" tick={false} stroke="#374151" />
-                <YAxis stroke="#6b7280" fontSize={10} width={40} domain={[0, 1]} />
+                <YAxis stroke="#6b7280" fontSize={10} width={40} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     fontSize: '12px',
                   }}
                   labelFormatter={(t) => new Date(t).toLocaleTimeString()}
-                  formatter={(value: number) => [`${value.toFixed(2)}%`]}
+                  formatter={(value: number) => [value.toFixed(0)]}
                 />
                 <Area
                   type="monotone"
@@ -207,31 +235,32 @@ export function APIPage() {
         <SectionHeader title="Services" subtitle="Performance by service" />
         <div className="grid grid-cols-4 gap-4">
           {serviceList.map((service) => {
-            const status = service.errorRate < 0.5 ? 'healthy' 
-              : service.errorRate < 2 ? 'degraded' 
+            const status = service.errorRate < 0.5 ? 'healthy'
+              : service.errorRate < 2 ? 'degraded'
               : 'down'
 
             return (
               <div
                 key={service.name}
-                className="p-4 bg-gray-800/50 rounded-lg border border-gray-700"
+                className="p-4 rounded-lg border border-theme"
+                style={{ background: 'var(--bg-card-alt)' }}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="font-medium text-gray-200 capitalize">{service.name}</span>
+                  <span className="font-medium text-theme-primary capitalize">{service.name}</span>
                   <StatusBadge status={status} />
                 </div>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Requests</span>
-                    <span className="text-gray-300">{service.requests.toLocaleString()}</span>
+                    <span className="text-theme-muted">Requests</span>
+                    <span className="text-theme-secondary">{service.requests.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Avg Latency</span>
-                    <span className="text-gray-300">{service.avgLatency.toFixed(0)}ms</span>
+                    <span className="text-theme-muted">Avg Latency</span>
+                    <span className="text-theme-secondary">{service.avgLatency.toFixed(0)}ms</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-500">Error Rate</span>
-                    <span className={service.errorRate > 1 ? 'text-red-400' : 'text-gray-300'}>
+                    <span className="text-theme-muted">Error Rate</span>
+                    <span className={service.errorRate > 1 ? 'text-red-400' : 'text-theme-secondary'}>
                       {service.errorRate.toFixed(2)}%
                     </span>
                   </div>
@@ -248,55 +277,45 @@ export function APIPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
+              <tr className="text-left text-xs text-theme-muted border-b border-theme">
                 <th className="pb-3 font-medium">Service</th>
                 <th className="pb-3 font-medium">Endpoint</th>
                 <th className="pb-3 font-medium">Requests</th>
                 <th className="pb-3 font-medium">Avg</th>
                 <th className="pb-3 font-medium">P95</th>
-                <th className="pb-3 font-medium">P99</th>
                 <th className="pb-3 font-medium">Errors</th>
-                <th className="pb-3 font-medium">5xx</th>
                 <th className="pb-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {apiData?.map((api) => {
-                const errorRate = (api.error_count / api.request_count) * 100
-                const status = errorRate < 0.5 ? 'healthy' : errorRate < 2 ? 'degraded' : 'down'
+                const errRate = (api.error_count / api.request_count) * 100
+                const status = errRate < 0.5 ? 'healthy' : errRate < 2 ? 'degraded' : 'down'
 
                 return (
-                  <tr key={`${api.service_name}-${api.endpoint}`} className="border-b border-gray-800/50">
+                  <tr key={`${api.service_name}-${api.endpoint}`} className="border-b border-theme">
                     <td className="py-3">
-                      <span className="text-sm font-medium text-gray-300 capitalize">
+                      <span className="text-sm font-medium text-theme-primary capitalize">
                         {api.service_name}
                       </span>
                     </td>
                     <td className="py-3">
-                      <code className="text-xs bg-gray-800 px-2 py-1 rounded text-gray-400">
+                      <code className="text-xs px-2 py-1 rounded text-theme-secondary" style={{ background: 'var(--bg-card-alt)' }}>
                         {api.endpoint}
                       </code>
                     </td>
-                    <td className="py-3 text-sm text-gray-400">
+                    <td className="py-3 text-sm text-theme-secondary">
                       {api.request_count.toLocaleString()}
                     </td>
-                    <td className="py-3 text-sm text-gray-300">
+                    <td className="py-3 text-sm text-theme-primary">
                       {api.avg_duration_ms.toFixed(0)}ms
                     </td>
-                    <td className="py-3 text-sm text-gray-400">
+                    <td className="py-3 text-sm text-theme-secondary">
                       {api.p95_duration_ms.toFixed(0)}ms
                     </td>
-                    <td className="py-3 text-sm text-gray-400">
-                      {api.p99_duration_ms.toFixed(0)}ms
-                    </td>
                     <td className="py-3 text-sm">
-                      <span className={api.error_count > 0 ? 'text-amber-400' : 'text-gray-400'}>
+                      <span className={api.error_count > 0 ? 'text-amber-400' : 'text-theme-secondary'}>
                         {api.error_count}
-                      </span>
-                    </td>
-                    <td className="py-3 text-sm">
-                      <span className={api.server_error_count > 0 ? 'text-red-400' : 'text-gray-400'}>
-                        {api.server_error_count}
                       </span>
                     </td>
                     <td className="py-3">

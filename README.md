@@ -1,6 +1,6 @@
-# Kaasino Pulse Collector
+# Product Pulse Collector
 
-High-throughput metrics collector for Kaasino performance monitoring.
+High-throughput metrics collector for Product Pulse performance monitoring.
 
 ## Architecture
 
@@ -56,7 +56,7 @@ Receives frontend events from the SDK.
 ```bash
 curl -X POST http://localhost:8080/collect \
   -H "Content-Type: application/json" \
-  -H "X-Site-Id: kaasino-prod" \
+  -H "X-Site-Id: product-prod" \
   -d '{
     "events": [{
       "time": "2024-01-15T10:30:00Z",
@@ -93,12 +93,12 @@ Collector statistics.
 ## Go Client for Internal Services
 
 ```go
-import "github.com/kaasino/pulse-collector/pkg/pulse"
+import "github.com/mcbile/product-pulse/pkg/pulse"
 
 // Initialize
 client := pulse.NewClient(pulse.ClientConfig{
     Endpoint:      "http://pulse-collector:8080",
-    SiteID:        "kaasino-internal",
+    SiteID:        "product-internal",
     FlushInterval: 5 * time.Second,
     BatchSize:     50,
 })
@@ -157,7 +157,7 @@ spec:
     spec:
       containers:
       - name: collector
-        image: kaasino/pulse-collector:latest
+        image: mcbile/product-pulse:latest
         ports:
         - containerPort: 8080
         env:
@@ -192,7 +192,7 @@ spec:
 ## Project Structure
 
 ```
-pulse-collector/
+product-pulse/
 ├── cmd/
 │   └── collector/
 │       └── main.go          # Entry point
@@ -215,6 +215,12 @@ pulse-collector/
 ├── go.mod
 └── README.md
 ```
+
+## Documentation
+
+- [FAQ.md](./FAQ.md) — Frequently Asked Questions
+- [DEPENDENCIES.md](./DEPENDENCIES.md) — Frontend dependency map
+- [CLAUDE.md](./CLAUDE.md) — Development instructions
 
 ## License
 © 2026 McBile AI-Engine

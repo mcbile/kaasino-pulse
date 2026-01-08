@@ -1,9 +1,10 @@
-module github.com/kaasino/pulse-collector
+module github.com/mcbile/product-pulse
 
 go 1.22
 
 require (
 	github.com/jackc/pgx/v5 v5.5.5
+	golang.org/x/time v0.5.0
 )
 
 require (

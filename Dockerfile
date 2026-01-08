@@ -14,7 +14,7 @@ RUN go mod download
 COPY . .
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /pulse-collector .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /pulse-collector ./cmd/collector
 
 # Runtime stage
 FROM alpine:3.19

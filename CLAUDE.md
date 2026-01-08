@@ -1,8 +1,14 @@
-# CLAUDE.md — Instructions for Claude Code for Kaasino Pulse
+# CLAUDE.md — Instructions for Claude Code for Product Pulse
 
 > **UNBREAKABLE RULES** — Follow these instructions for every code change.
 
-—
+## Related Documentation
+
+- [FAQ.md](./FAQ.md) — Frequently Asked Questions
+- [DEPENDENCIES.md](./DEPENDENCIES.md) — Frontend dependency map
+- [README.md](./README.md) — Project overview
+
+---
 
 ## Impact Analysis (MANDATORY)
 
@@ -49,10 +55,10 @@
 
 ## Project Overview
 
-**Kaasino Pulse** — система мониторинга производительности для казино-платформы. Состоит из трёх компонентов:
+**Product Pulse** — система мониторинга производительности. Состоит из трёх компонентов:
 
 1. **Go Collector** — высокопроизводительный сборщик метрик (~50k events/sec)
-2. **Frontend SDK** — TypeScript SDK для браузеров (@kaasino/pulse-sdk)
+2. **Frontend SDK** — TypeScript SDK для браузеров (@product/pulse-sdk)
 3. **Dashboard** — React-приложение для визуализации метрик
 
 ```
@@ -153,6 +159,13 @@ docker-compose up -d         # Запуск с БД
 | `/api/alerts` | GET | Список алертов |
 | `/api/alerts/{time}/acknowledge` | POST | Подтвердить алерт |
 
+### Authentication API
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/auth/login` | POST | Вход (email/nickname + password) |
+| `/api/auth/logout` | POST | Выход (invalidate token) |
+| `/api/auth/verify` | GET | Проверка токена сессии |
+
 ---
 
 ## Database Schema (TimescaleDB)
@@ -196,7 +209,8 @@ internal/
 │   └── config.go            # Environment config
 ├── handler/
 │   ├── handler.go           # Collect + health handlers
-│   └── dashboard.go         # Dashboard API handlers
+│   ├── dashboard.go         # Dashboard API handlers
+│   └── auth.go              # Authentication handlers
 ├── middleware/
 │   ├── ratelimit.go         # Per-IP rate limiting
 │   └── bodysize.go          # Request body size limit
@@ -214,12 +228,45 @@ pkg/
 
 | Page | Component | Description |
 |------|-----------|-------------|
-| Overview | `OverviewPage.tsx` | Сводка всех метрик |
+| Overview | `OverviewPage.tsx` | Сводка технических метрик |
 | Web Vitals | `WebVitalsPage.tsx` | LCP, FID, CLS, INP |
 | PSP | `PSPPage.tsx` | Платёжные провайдеры |
 | API | `APIPage.tsx` | Backend endpoints |
-| Games | `GamesPage.tsx` | Game providers |
+| Games | `GamesPage.tsx` | Game providers + ISR статистика |
 | Alerts | `AlertsPage.tsx` | Оповещения |
+| Finance | `FinancePage.tsx` | Финансовые метрики (GGR, deposits) |
+| Users | `UsersPage` (в App.tsx) | Управление пользователями |
+
+---
+
+## Authentication & Roles
+
+### Роли пользователей
+
+| Role | Dashboard Access | User Management | Permissions Control |
+|------|-----------------|-----------------|---------------------|
+| `super_admin` | Все страницы | Полное (add/edit/delete всех) | Может менять роли |
+| `admin` | Все страницы | Только клиенты | Может вкл/выкл доступ к Finance/PSP |
+| `client` | По permissions | Нет | — |
+
+### Методы входа
+
+| Метод | Описание |
+|-------|----------|
+| Email + пароль | `michael@starcrown.partners` / `Pulse4me!` |
+| Nickname + пароль | `mcbile` / `Pulse4me!` |
+| Google OAuth | Для @starcrown.partners emails |
+
+### Environment Variables (Auth)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ADMIN_USERS` | — | Формат: `email:hash:name:nickname,email2:...` |
+
+### Default Super Admin
+- **Email**: `michael@starcrown.partners`
+- **Nickname**: `McBile`
+- **Password**: `Pulse4me!`
 
 ---
 
@@ -250,11 +297,11 @@ pkg/
 ## Go Client Usage
 
 ```go
-import "github.com/kaasino/pulse-collector/pkg/pulse"
+import "github.com/mcbile/product-pulse/pkg/pulse"
 
 client := pulse.NewClient(pulse.ClientConfig{
     Endpoint:      "http://pulse-collector:8080",
-    SiteID:        "kaasino-internal",
+    SiteID:        "product-internal",
     FlushInterval: 5 * time.Second,
     BatchSize:     50,
 })
@@ -288,7 +335,7 @@ handler := client.HTTPMiddleware("wallet")(mux)
 ## File Structure
 
 ```
-kaasino-pulse/
+product-pulse/
 ├── cmd/
 │   └── collector/
 │       └── main.go              # Go collector entry point
@@ -308,18 +355,38 @@ kaasino-pulse/
 │
 ├── index.ts                     # TypeScript SDK entry
 ├── client.ts                    # SDK client
+├── react.tsx                    # React SDK wrapper
 │
-├── App.tsx                      # Dashboard root
-├── index.tsx                    # React entry
-├── *Page.tsx                    # Dashboard pages
-├── Header.tsx, Sidebar.tsx      # Layout components
+├── App.tsx                      # Dashboard root + UsersPage
+├── index.tsx                    # React entry point
+├── OverviewPage.tsx             # Overview dashboard (technical metrics)
+├── WebVitalsPage.tsx            # Web Vitals page
+├── PSPPage.tsx                  # PSP health page
+├── APIPage.tsx                  # API performance page
+├── GamesPage.tsx                # Game providers + ISR statistics
+├── AlertsPage.tsx               # Alerts page
+├── FinancePage.tsx              # Financial metrics (GGR, deposits)
+├── Header.tsx                   # Header component
+├── AuthContext.tsx              # Authentication (login, logout, Google OAuth)
+├── ThemeContext.tsx             # Light/dark theme
+├── TimeRangeContext.tsx         # Time range selector
+├── apiClient.ts                 # API client + mock data
+├── components.tsx               # Shared components
+├── ui.tsx                       # UI primitives (cards, badges, etc.)
 │
-├── kaasino_pulse_schema.sql     # Database schema
+├── index.css                    # Global styles + Tailwind
+├── index.html                   # HTML template
+├── product_pulse_schema.sql     # Database schema
 ├── docker-compose.yml           # Local development
 ├── Dockerfile                   # Container build
+├── render.yaml                  # Render deployment config
 ├── package.json                 # Node dependencies
 ├── go.mod                       # Go dependencies
-└── vite.config.ts               # Vite config
+├── vite.config.ts               # Vite config
+├── tailwind.config.js           # Tailwind config
+├── tsconfig.json                # TypeScript config
+├── .env.example                 # Environment variables template
+└── .gitignore                   # Git ignore rules
 ```
 
 ---
@@ -366,7 +433,7 @@ curl https://pulse-collector.onrender.com/metrics
 
 | Variable | Value |
 |----------|-------|
-| `ALLOWED_ORIGINS` | `https://pulse-dashboard.onrender.com,https://kaasino.com` |
+| `ALLOWED_ORIGINS` | `https://pulse-dashboard.onrender.com` |
 | `DEBUG` | `false` (production) |
 
 ### После деплоя
@@ -376,7 +443,7 @@ curl https://pulse-collector.onrender.com/metrics
 psql $DATABASE_URL -c "CREATE EXTENSION IF NOT EXISTS timescaledb;"
 
 # Применить схему
-psql $DATABASE_URL -f kaasino_pulse_schema.sql
+psql $DATABASE_URL -f product_pulse_schema.sql
 
 # Обновить continuous aggregates
 psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', NULL, NULL);"
@@ -388,7 +455,7 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 
 ### Добавление нового типа метрики
 
-1. Добавь таблицу в `kaasino_pulse_schema.sql`
+1. Добавь таблицу в `product_pulse_schema.sql`
 2. Создай hypertable с `create_hypertable()`
 3. Добавь retention policy
 4. Добавь compression policy
@@ -421,6 +488,46 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 
 ## Changelog
 
+### v1.4.0 (2026-01-08)
+- **Project Rename** — полный ренейминг проекта
+  - Kaasino Pulse → Product Pulse
+  - Go module: `github.com/mcbile/product-pulse`
+  - NPM package: `@product/pulse`
+  - Docker image: `mcbile/product-pulse`
+  - SQL schema: `product_pulse_schema.sql`
+- **Logo Update** — логотип "M" + "Product"
+- **Deterministic Charts** — графики теперь детерминированные (seeded random)
+- **Export Fix** — исправлен экспорт с учётом фильтров
+- **PSP View All** — раскрывающийся список failed transactions
+- **Super Admin Badge** — фиолетовый бейдж для super_admin
+- **Permissions UI** — статичные permissions для super_admin
+
+### v1.3.0 (2026-01-07)
+- **Backend Authentication** — Go backend для безопасной аутентификации
+  - `/api/auth/login`, `/api/auth/logout`, `/api/auth/verify` endpoints
+  - Session tokens с 24h expiry
+  - Password hashing (SHA256)
+  - Убраны hardcoded credentials из frontend
+- **Role-Based Access Control** — три роли с разными правами:
+  - `super_admin` — полный доступ + управление пользователями
+  - `admin` — полный доступ к dashboard + управление клиентами
+  - `client` — ограниченный доступ (по permissions)
+- **User Management Page** — страница управления пользователями (для admin/super_admin):
+  - Добавление пользователей с генерацией пароля
+  - Редактирование nickname, email, роли
+  - Сброс пароля
+  - Удаление пользователей
+  - Управление permissions (Finance, PSP доступ)
+- **Finance Page** — отдельная страница для финансовых метрик (GGR, deposits, withdrawals)
+- **Games ISR Statistics** — добавлена ISR (Instant Success Rate) статистика по провайдерам
+- **Auth Sync** — синхронизация между методами входа (email/nickname/Google OAuth)
+- Environment variable: `ADMIN_USERS` для настройки admin accounts
+
+### v1.2.1 (2026-01-07)
+- **Dashboard Authentication** — frontend авторизация (Google OAuth + email/password)
+- AuthContext с LoginPage и UserMenu
+- Защита Dashboard через ProtectedApp wrapper
+
 ### v1.2.0 (2026-01-07)
 - **Dashboard Redesign** — новый дизайн на основе MAE IDP
 - Переключатель светлой/тёмной темы
@@ -428,7 +535,7 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 - Кнопка "Apply" для применения фильтров
 - Экспорт метрик в CSV и Markdown
 - Графики реагируют на применённые фильтры
-- Ребрендинг: Kaasino Pulse → Pulse View
+- Ребрендинг: Kaasino Pulse → Product Pulse
 - ThemeContext для управления темой
 - FiltersContext для управления фильтрами
 - Обновлённые UI компоненты (ui.tsx)
@@ -443,7 +550,7 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 
 ### v1.0.0 (Initial Release)
 - Go Collector с batch processing и COPY protocol
-- Frontend SDK (@kaasino/pulse-sdk) для Web Vitals
+- Frontend SDK (@product/pulse-sdk) для Web Vitals
 - Dashboard с 6 страницами (Overview, Web Vitals, PSP, API, Games, Alerts)
 - TimescaleDB схема с 7 hypertables
 - Continuous aggregates для real-time дашбордов
@@ -458,16 +565,17 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 - [ ] **Alerting system** — настраиваемые пороги и уведомления (Slack, Telegram, PagerDuty)
 - [ ] **User sessions tracking** — связь метрик с конкретными сессиями игроков
 - [ ] **Anomaly detection** — автоматическое обнаружение аномалий в метриках
-- [ ] **Dashboard authentication** — авторизация для доступа к дашборду
+- [ ] **Database user storage** — хранение пользователей в PostgreSQL вместо localStorage
 - [ ] **GeoIP integration** — определение страны по IP (MaxMind GeoIP2)
 
 ### Medium Priority
 - [ ] **Grafana integration** — экспорт метрик в Grafana
 - [ ] **Custom dashboards** — возможность создавать свои дашборды
 - [ ] **Retention configuration UI** — управление retention через UI
-- [x] **Export to CSV/Excel** — экспорт данных для отчётов ✅ v1.2.0
 - [ ] **Mobile SDK** — React Native / Flutter SDK
 - [ ] **Sampling configuration** — настраиваемый sampling для высоконагруженных эндпоинтов
+- [ ] **Password change** — возможность пользователю сменить свой пароль
+- [ ] **Live status indicators** — индикаторы "System OK" (проверка /health) и "Live" (real-time updates)
 
 ### Low Priority
 - [ ] **Multi-tenancy** — поддержка нескольких сайтов в одной инсталляции
@@ -482,6 +590,7 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 - [ ] Документация API (OpenAPI/Swagger)
 - [ ] CI/CD pipeline (GitHub Actions)
 - [ ] Helm chart для Kubernetes
+- [ ] Использовать bcrypt вместо SHA256 для паролей
 
 ### GitHub Actions CI/CD
 - [ ] **Go CI** — unit tests, race detector, coverage upload (codecov)
@@ -492,12 +601,36 @@ psql $DATABASE_URL -c "CALL refresh_continuous_aggregate('api_performance_1m', N
 - [ ] **Docker Build** — сборка и push образа в registry
 - [ ] **Schema Validation** — проверка SQL миграций на чистой БД
 
+### Completed (v1.4.0)
+- [x] Project Rename (Kaasino Pulse → Product Pulse)
+- [x] Go module update (github.com/mcbile/product-pulse)
+- [x] Logo "M" + "Product"
+- [x] Deterministic charts (seeded random)
+- [x] Export with filters
+- [x] PSP View All button
+- [x] Super admin purple badge
+- [x] Static permissions for super_admin
+
+### Completed (v1.3.0)
+- [x] Backend Authentication (Go auth handler)
+- [x] Role-Based Access Control (super_admin, admin, client)
+- [x] User Management Page (add/edit/delete users)
+- [x] Finance Page (отдельная страница для финансов)
+- [x] Games ISR Statistics (статистика по провайдерам)
+- [x] Auth Sync (синхронизация email/nickname/Google OAuth)
+- [x] Permissions system (Finance, PSP access control)
+
+### Completed (v1.2.1)
+- [x] Dashboard Authentication (AuthContext, LoginPage, UserMenu)
+- [x] ProtectedApp wrapper для защиты дашборда
+- [x] Google OAuth integration
+
 ### Completed (v1.2.0)
 - [x] Dashboard Redesign (MAE IDP дизайн)
 - [x] Light/Dark theme toggle
 - [x] Brand/Country filters
 - [x] Export to CSV/Markdown
-- [x] Ребрендинг → Pulse View
+- [x] Ребрендинг → Product Pulse
 
 ### Completed (v1.1.0)
 - [x] Реструктуризация Go проекта (cmd/internal/pkg)

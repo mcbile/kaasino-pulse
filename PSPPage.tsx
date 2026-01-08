@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   AreaChart,
@@ -10,30 +11,37 @@ import {
   Pie,
   Cell,
 } from 'recharts'
-import { CreditCard, TrendingUp, TrendingDown, Clock, AlertTriangle } from 'lucide-react'
-import { useTimeRange } from '../context/TimeRangeContext'
-import { mockData, PSPHealth } from '../api/client'
-import { MetricCard, Card, SectionHeader, StatusBadge, ProgressBar } from '../components/ui'
+import { CreditCard, TrendingUp, Clock, AlertTriangle, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
+import { useTimeRange } from './TimeRangeContext'
+import { useFilters } from './App'
+import { mockDataAPI, PSPHealth } from './apiClient'
+import { MetricCard, Card, SectionHeader, StatusBadge, ProgressBar } from './ui'
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4']
+const FAILED_ITEMS_COLLAPSED = 3
 
 export function PSPPage() {
-  const { getStartTime } = useTimeRange()
+  const [showAllFailed, setShowAllFailed] = useState(false)
+  const { range } = useTimeRange()
+  const { appliedBrand, appliedCountry } = useFilters()
 
-  const { data: pspData } = useQuery({
-    queryKey: ['psp', getStartTime().toISOString()],
-    queryFn: () => Promise.resolve(mockData.pspHealth),
+  const filters = {
+    brand: appliedBrand,
+    country: appliedCountry,
+    timeRange: range,
+  }
+
+  const { data: pspData, isLoading: pspLoading } = useQuery({
+    queryKey: ['psp-health', appliedBrand, appliedCountry, range],
+    queryFn: () => mockDataAPI.getPSPHealth(filters),
   })
 
-  // Group by PSP
-  const byPSP = pspData?.reduce((acc, p) => {
-    if (!acc[p.psp_name]) {
-      acc[p.psp_name] = { deposits: null, withdrawals: null }
-    }
-    if (p.operation === 'deposit') acc[p.psp_name].deposits = p
-    if (p.operation === 'withdrawal') acc[p.psp_name].withdrawals = p
-    return acc
-  }, {} as Record<string, { deposits: PSPHealth | null; withdrawals: PSPHealth | null }>)
+  const { data: timeSeriesData, isLoading: tsLoading } = useQuery({
+    queryKey: ['psp-timeseries', appliedBrand, appliedCountry, range],
+    queryFn: () => mockDataAPI.getPSPTimeSeries(filters),
+  })
+
+  const isLoading = pspLoading || tsLoading
 
   // Totals
   const deposits = pspData?.filter(p => p.operation === 'deposit') ?? []
@@ -44,8 +52,8 @@ export function PSPPage() {
 
   const depositSuccessRate = (successfulDeposits / totalDeposits) * 100 || 0
 
-  const successTrend = mockData.generateTimeSeries(24, 98, 3)
-  const volumeTrend = mockData.generateTimeSeries(24, 5000, 2000)
+  // Combined success rate from all PSPs for chart
+  const successTrend = timeSeriesData?.pix || []
 
   // Pie chart data
   const volumeByPSP = deposits.map((p, i) => ({
@@ -60,6 +68,14 @@ export function PSPPage() {
     return 'down'
   }
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-theme-muted" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Key Metrics */}
@@ -71,6 +87,8 @@ export function PSPPage() {
           trend={0.5}
           icon={<TrendingUp size={20} />}
           status={depositSuccessRate >= 98 ? 'good' : depositSuccessRate >= 95 ? 'warning' : 'critical'}
+          tooltip="Процент успешно завершённых платёжных транзакций по всем провайдерам."
+          thresholds={{ good: '≥98%', warning: '95-98%', critical: '<95%' }}
         />
         <MetricCard
           title="Total Volume"
@@ -79,6 +97,7 @@ export function PSPPage() {
           trend={12.3}
           icon={<CreditCard size={20} />}
           status="good"
+          tooltip="Общий объём платежей в долларах за выбранный период."
         />
         <MetricCard
           title="Avg Latency"
@@ -87,6 +106,8 @@ export function PSPPage() {
           trend={-5.2}
           icon={<Clock size={20} />}
           status={avgLatency < 2000 ? 'good' : avgLatency < 5000 ? 'warning' : 'critical'}
+          tooltip="Среднее время от инициации платежа до подтверждения провайдером."
+          thresholds={{ good: '<2s', warning: '2-5s', critical: '>5s' }}
         />
         <MetricCard
           title="Failed Txns"
@@ -94,6 +115,8 @@ export function PSPPage() {
           subtitle="Requires attention"
           icon={<AlertTriangle size={20} />}
           status={totalDeposits - successfulDeposits > 10 ? 'warning' : 'good'}
+          tooltip="Количество неуспешных транзакций, требующих анализа причин отказа."
+          thresholds={{ good: '≤10', warning: '10-50', critical: '>50' }}
         />
       </div>
 
@@ -101,7 +124,7 @@ export function PSPPage() {
       <div className="grid grid-cols-2 gap-6">
         {/* Success Rate Trend */}
         <Card>
-          <SectionHeader title="Success Rate Trend" subtitle="All PSPs (%)" />
+          <SectionHeader title="Success Rate Trend" subtitle="PIX deposits (%)" />
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={successTrend}>
@@ -120,8 +143,8 @@ export function PSPPage() {
                 <YAxis stroke="#6b7280" fontSize={11} domain={[90, 100]} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                   }}
                   labelFormatter={(t) => new Date(t).toLocaleString()}
@@ -155,14 +178,14 @@ export function PSPPage() {
                   outerRadius={90}
                   paddingAngle={2}
                 >
-                  {volumeByPSP.map((entry, index) => (
+                  {volumeByPSP.map((entry) => (
                     <Cell key={entry.name} fill={entry.color} />
                   ))}
                 </Pie>
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                   }}
                   formatter={(value: number) => [`$${value.toLocaleString()}`, 'Volume']}
@@ -176,8 +199,8 @@ export function PSPPage() {
                     className="w-3 h-3 rounded-full"
                     style={{ backgroundColor: p.color }}
                   />
-                  <span className="text-sm text-gray-300">{p.name}</span>
-                  <span className="text-sm text-gray-500 ml-auto">
+                  <span className="text-sm text-theme-secondary">{p.name}</span>
+                  <span className="text-sm text-theme-muted ml-auto">
                     ${p.value.toLocaleString()}
                   </span>
                 </div>
@@ -193,7 +216,7 @@ export function PSPPage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
+              <tr className="text-left text-xs text-theme-muted border-b border-theme">
                 <th className="pb-3 font-medium">Provider</th>
                 <th className="pb-3 font-medium">Operation</th>
                 <th className="pb-3 font-medium">Transactions</th>
@@ -205,26 +228,26 @@ export function PSPPage() {
               </tr>
             </thead>
             <tbody>
-              {pspData?.map((psp, i) => {
+              {pspData?.map((psp) => {
                 const successRate = (psp.success_count / psp.total_count) * 100
 
                 return (
-                  <tr key={`${psp.psp_name}-${psp.operation}`} className="border-b border-gray-800/50">
+                  <tr key={`${psp.psp_name}-${psp.operation}`} className="border-b border-theme">
                     <td className="py-4">
-                      <span className="font-medium text-gray-300">{psp.psp_name}</span>
+                      <span className="font-medium text-theme-primary">{psp.psp_name}</span>
                     </td>
                     <td className="py-4">
                       <span className={`
                         px-2 py-1 text-xs rounded-full
-                        ${psp.operation === 'deposit' 
-                          ? 'bg-emerald-500/10 text-emerald-500' 
+                        ${psp.operation === 'deposit'
+                          ? 'bg-emerald-500/10 text-emerald-500'
                           : 'bg-blue-500/10 text-blue-500'
                         }
                       `}>
                         {psp.operation}
                       </span>
                     </td>
-                    <td className="py-4 text-gray-400">
+                    <td className="py-4 text-theme-secondary">
                       {psp.total_count.toLocaleString()}
                     </td>
                     <td className="py-4">
@@ -234,18 +257,18 @@ export function PSPPage() {
                           color={successRate >= 98 ? 'emerald' : successRate >= 95 ? 'amber' : 'red'}
                           size="sm"
                         />
-                        <span className="text-sm text-gray-300 w-14">
+                        <span className="text-sm text-theme-primary w-14">
                           {successRate.toFixed(1)}%
                         </span>
                       </div>
                     </td>
-                    <td className="py-4 text-gray-400">
+                    <td className="py-4 text-theme-secondary">
                       {psp.avg_duration_ms.toFixed(0)}ms
                     </td>
-                    <td className="py-4 text-gray-400">
+                    <td className="py-4 text-theme-secondary">
                       {psp.p95_duration_ms.toFixed(0)}ms
                     </td>
-                    <td className="py-4 text-gray-300">
+                    <td className="py-4 text-theme-primary">
                       ${psp.total_amount.toLocaleString()}
                     </td>
                     <td className="py-4">
@@ -261,38 +284,60 @@ export function PSPPage() {
 
       {/* Failed Transactions */}
       <Card>
-        <SectionHeader 
-          title="Failed Transactions" 
-          subtitle="Recent failures by PSP"
-          action={
-            <button className="text-xs text-emerald-500 hover:text-emerald-400">
-              View all →
-            </button>
-          }
-        />
-        <div className="space-y-3">
-          {pspData?.filter(p => p.total_count - p.success_count > 0).map((psp) => {
-            const failed = psp.total_count - psp.success_count
-            return (
-              <div key={`${psp.psp_name}-${psp.operation}-failed`} className="flex items-center gap-4 p-3 bg-gray-800/50 rounded-lg">
-                <div className="p-2 bg-red-500/10 rounded-lg">
-                  <AlertTriangle className="text-red-500" size={18} />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-gray-300">
-                    {psp.psp_name} - {psp.operation}
+        {(() => {
+          const failedItems = pspData?.filter(p => p.total_count - p.success_count > 0) || []
+          const hasMore = failedItems.length > FAILED_ITEMS_COLLAPSED
+          const displayItems = showAllFailed ? failedItems : failedItems.slice(0, FAILED_ITEMS_COLLAPSED)
+
+          return (
+            <>
+              <SectionHeader
+                title="Failed Transactions"
+                subtitle="Recent failures by PSP"
+                action={hasMore ? (
+                  <button
+                    onClick={() => setShowAllFailed(!showAllFailed)}
+                    className="text-xs text-emerald-500 hover:text-emerald-400 flex items-center gap-1"
+                  >
+                    {showAllFailed ? (
+                      <>Show less <ChevronUp size={14} /></>
+                    ) : (
+                      <>View all ({failedItems.length}) <ChevronDown size={14} /></>
+                    )}
+                  </button>
+                ) : undefined}
+              />
+              <div className="space-y-3">
+                {displayItems.map((psp) => {
+                  const failed = psp.total_count - psp.success_count
+                  return (
+                    <div key={`${psp.psp_name}-${psp.operation}-failed`} className="flex items-center gap-4 p-3 rounded-lg" style={{ background: 'var(--bg-card-alt)' }}>
+                      <div className="p-2 bg-red-500/10 rounded-lg">
+                        <AlertTriangle className="text-red-500" size={18} />
+                      </div>
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-theme-primary">
+                          {psp.psp_name} - {psp.operation}
+                        </div>
+                        <div className="text-xs text-theme-muted">
+                          {failed} failed of {psp.total_count} transactions
+                        </div>
+                      </div>
+                      <div className="text-sm text-red-400">
+                        {((failed / psp.total_count) * 100).toFixed(1)}% failure
+                      </div>
+                    </div>
+                  )
+                })}
+                {failedItems.length === 0 && (
+                  <div className="text-center py-4 text-theme-muted text-sm">
+                    No failed transactions
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {failed} failed of {psp.total_count} transactions
-                  </div>
-                </div>
-                <div className="text-sm text-red-400">
-                  {((failed / psp.total_count) * 100).toFixed(1)}% failure
-                </div>
+                )}
               </div>
-            )
-          })}
-        </div>
+            </>
+          )
+        })()}
       </Card>
     </div>
   )

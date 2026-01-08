@@ -1,6 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useTimeRange, TIME_RANGES } from '../context/TimeRangeContext'
+import { useTimeRange, TIME_RANGES } from './TimeRangeContext'
 
 export function Header() {
   const { range, setRange } = useTimeRange()

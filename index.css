@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 /* ============================================
-   KAASINO PULSE DESIGN SYSTEM
+   PRODUCT PULSE DESIGN SYSTEM
    Based on MAE IDP Design
    ============================================ */
 
@@ -103,6 +103,39 @@ body {
 /* Chart tooltip customization */
 .recharts-tooltip-wrapper {
   outline: none;
+}
+
+.recharts-default-tooltip {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25) !important;
+  padding: 12px !important;
+}
+
+.recharts-tooltip-label {
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+  margin-bottom: 8px !important;
+}
+
+.recharts-tooltip-item {
+  color: var(--text-secondary) !important;
+  padding: 2px 0 !important;
+}
+
+.recharts-tooltip-item-name {
+  color: var(--text-muted) !important;
+}
+
+.recharts-tooltip-item-value {
+  color: var(--text-primary) !important;
+  font-weight: 600 !important;
+}
+
+/* Pie chart tooltip */
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--bg-card) !important;
 }
 
 /* ============================================
@@ -366,6 +399,23 @@ body {
 .sidebar-item:hover {
   color: var(--text-secondary);
   background: var(--bg-card-alt);
+}
+
+/* Light theme hover enhancement */
+html[data-theme="light"] .sidebar-item:hover {
+  background: #E8E8E8;
+}
+
+html[data-theme="light"] .card:hover {
+  background: #F5F5F5;
+}
+
+html[data-theme="light"] .btn-secondary:hover {
+  background: #E8E8E8;
+}
+
+html[data-theme="light"] .table tr:hover td {
+  background: #F0F0F0;
 }
 
 .sidebar-item.active {

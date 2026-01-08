@@ -6,23 +6,21 @@ import {
   YAxis,
   Tooltip,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  Cell,
 } from 'recharts'
-import { Monitor, Smartphone, Tablet } from 'lucide-react'
-import { useTimeRange } from '../context/TimeRangeContext'
-import { mockData } from '../api/client'
-import { MetricCard, Card, SectionHeader, StatusBadge, ProgressBar } from '../components/ui'
+import { Monitor, Smartphone, Tablet, Loader2 } from 'lucide-react'
+import { useTimeRange } from './TimeRangeContext'
+import { useFilters } from './App'
+import { mockDataAPI } from './apiClient'
+import { MetricCard, Card, SectionHeader, StatusBadge } from './ui'
 
 // Web Vitals thresholds (Google standards)
 const thresholds = {
-  lcp: { good: 2500, poor: 4000 },
+  lcp: { good: 2.5, poor: 4.0 },
   fid: { good: 100, poor: 300 },
   cls: { good: 0.1, poor: 0.25 },
   inp: { good: 200, poor: 500 },
   ttfb: { good: 800, poor: 1800 },
-  fcp: { good: 1800, poor: 3000 },
+  fcp: { good: 1.8, poor: 3.0 },
 }
 
 function getVitalStatus(value: number, metric: keyof typeof thresholds): 'good' | 'warning' | 'critical' {
@@ -37,52 +35,36 @@ function getVitalColor(status: 'good' | 'warning' | 'critical'): string {
 }
 
 export function WebVitalsPage() {
-  const { getStartTime } = useTimeRange()
+  const { range } = useTimeRange()
+  const { appliedBrand, appliedCountry } = useFilters()
 
-  const { data: vitalsData } = useQuery({
-    queryKey: ['vitals', getStartTime().toISOString()],
-    queryFn: () => Promise.resolve(mockData.webVitals),
-  })
-
-  // Aggregate by device type
-  const aggregated = vitalsData?.reduce((acc, v) => {
-    if (!acc[v.device_type]) {
-      acc[v.device_type] = { samples: 0, lcp: 0, fid: 0, cls: 0, inp: 0 }
-    }
-    acc[v.device_type].samples += v.sample_count
-    acc[v.device_type].lcp += v.p75_lcp_ms * v.sample_count
-    acc[v.device_type].fid += v.p75_fid_ms * v.sample_count
-    acc[v.device_type].cls += v.p75_cls * v.sample_count
-    acc[v.device_type].inp += v.p75_inp_ms * v.sample_count
-    return acc
-  }, {} as Record<string, { samples: number; lcp: number; fid: number; cls: number; inp: number }>)
-
-  // Calculate weighted averages
-  const deviceMetrics = Object.entries(aggregated ?? {}).map(([device, data]) => ({
-    device,
-    lcp: data.lcp / data.samples,
-    fid: data.fid / data.samples,
-    cls: data.cls / data.samples,
-    inp: data.inp / data.samples,
-    samples: data.samples,
-  }))
-
-  // Overall metrics (weighted by samples)
-  const totalSamples = deviceMetrics.reduce((sum, d) => sum + d.samples, 0)
-  const overall = {
-    lcp: deviceMetrics.reduce((sum, d) => sum + d.lcp * d.samples, 0) / totalSamples || 0,
-    fid: deviceMetrics.reduce((sum, d) => sum + d.fid * d.samples, 0) / totalSamples || 0,
-    cls: deviceMetrics.reduce((sum, d) => sum + d.cls * d.samples, 0) / totalSamples || 0,
-    inp: deviceMetrics.reduce((sum, d) => sum + d.inp * d.samples, 0) / totalSamples || 0,
+  const filters = {
+    brand: appliedBrand,
+    country: appliedCountry,
+    timeRange: range,
   }
 
-  const lcpTrend = mockData.generateTimeSeries(24, 2200, 600)
-  const clsTrend = mockData.generateTimeSeries(24, 0.08, 0.04)
+  const { data: vitals, isLoading: vitalsLoading } = useQuery({
+    queryKey: ['web-vitals', appliedBrand, appliedCountry, range],
+    queryFn: () => mockDataAPI.getWebVitals(filters),
+  })
 
-  const DeviceIcon = ({ type }: { type: string }) => {
-    if (type === 'mobile') return <Smartphone size={18} />
-    if (type === 'tablet') return <Tablet size={18} />
-    return <Monitor size={18} />
+  const { data: timeSeriesData, isLoading: tsLoading } = useQuery({
+    queryKey: ['web-vitals-timeseries', appliedBrand, appliedCountry, range],
+    queryFn: () => mockDataAPI.getWebVitalsTimeSeries(filters),
+  })
+
+  const isLoading = vitalsLoading || tsLoading
+
+  const lcpTrend = timeSeriesData?.lcp || []
+  const clsTrend = timeSeriesData?.cls || []
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="w-8 h-8 animate-spin text-theme-muted" />
+      </div>
+    )
   }
 
   return (
@@ -91,27 +73,35 @@ export function WebVitalsPage() {
       <div className="grid grid-cols-4 gap-4">
         <MetricCard
           title="LCP (p75)"
-          value={`${overall.lcp.toFixed(0)}ms`}
+          value={`${vitals?.lcp.value.toFixed(2)}s`}
           subtitle="Largest Contentful Paint"
-          status={getVitalStatus(overall.lcp, 'lcp')}
+          status={getVitalStatus(vitals?.lcp.value || 0, 'lcp')}
+          tooltip="Время загрузки самого большого видимого элемента (изображение или текстовый блок). Критическая метрика для воспринимаемой скорости загрузки."
+          thresholds={{ good: '≤2.5s', warning: '2.5-4s', critical: '>4s' }}
         />
         <MetricCard
           title="FID (p75)"
-          value={`${overall.fid.toFixed(0)}ms`}
+          value={`${vitals?.fid.value.toFixed(0)}ms`}
           subtitle="First Input Delay"
-          status={getVitalStatus(overall.fid, 'fid')}
+          status={getVitalStatus(vitals?.fid.value || 0, 'fid')}
+          tooltip="Задержка между первым взаимодействием пользователя (клик, тап) и реакцией браузера. Влияет на отзывчивость интерфейса."
+          thresholds={{ good: '≤100ms', warning: '100-300ms', critical: '>300ms' }}
         />
         <MetricCard
           title="CLS (p75)"
-          value={overall.cls.toFixed(3)}
+          value={vitals?.cls.value.toFixed(3) || '0'}
           subtitle="Cumulative Layout Shift"
-          status={getVitalStatus(overall.cls, 'cls')}
+          status={getVitalStatus(vitals?.cls.value || 0, 'cls')}
+          tooltip="Визуальная стабильность — насколько 'прыгает' контент при загрузке. Измеряется как доля смещённой области viewport."
+          thresholds={{ good: '≤0.1', warning: '0.1-0.25', critical: '>0.25' }}
         />
         <MetricCard
           title="INP (p75)"
-          value={`${overall.inp.toFixed(0)}ms`}
+          value={`${vitals?.inp.value.toFixed(0)}ms`}
           subtitle="Interaction to Next Paint"
-          status={getVitalStatus(overall.inp, 'inp')}
+          status={getVitalStatus(vitals?.inp.value || 0, 'inp')}
+          tooltip="Отзывчивость интерфейса — время от любого взаимодействия до визуального обновления. Заменил FID как основную метрику в 2024."
+          thresholds={{ good: '≤200ms', warning: '200-500ms', critical: '>500ms' }}
         />
       </div>
 
@@ -119,7 +109,7 @@ export function WebVitalsPage() {
       <div className="grid grid-cols-2 gap-6">
         {/* LCP Trend */}
         <Card>
-          <SectionHeader title="LCP Trend" subtitle="Largest Contentful Paint (ms)" />
+          <SectionHeader title="LCP Trend" subtitle="Largest Contentful Paint (s)" />
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={lcpTrend}>
@@ -129,7 +119,6 @@ export function WebVitalsPage() {
                     <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                {/* Threshold lines */}
                 <XAxis
                   dataKey="time"
                   tickFormatter={(t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -139,21 +128,12 @@ export function WebVitalsPage() {
                 <YAxis stroke="#6b7280" fontSize={11} domain={[0, 'auto']} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                   }}
                   labelFormatter={(t) => new Date(t).toLocaleString()}
-                  formatter={(value: number) => [`${value.toFixed(0)}ms`, 'LCP']}
-                />
-                {/* Good threshold */}
-                <Area
-                  type="monotone"
-                  dataKey={() => thresholds.lcp.good}
-                  stroke="#10b981"
-                  strokeDasharray="5 5"
-                  strokeWidth={1}
-                  fill="none"
+                  formatter={(value: number) => [`${value.toFixed(2)}s`, 'LCP']}
                 />
                 <Area
                   type="monotone"
@@ -165,7 +145,7 @@ export function WebVitalsPage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-2 flex gap-4 text-xs text-gray-500">
+          <div className="mt-2 flex gap-4 text-xs text-theme-muted">
             <span className="flex items-center gap-1">
               <span className="w-3 h-0.5 bg-emerald-500" /> Good: ≤2.5s
             </span>
@@ -199,8 +179,8 @@ export function WebVitalsPage() {
                 <YAxis stroke="#6b7280" fontSize={11} domain={[0, 0.3]} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1f2937',
-                    border: '1px solid #374151',
+                    backgroundColor: 'var(--bg-card)',
+                    border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                   }}
                   labelFormatter={(t) => new Date(t).toLocaleString()}
@@ -216,7 +196,7 @@ export function WebVitalsPage() {
               </AreaChart>
             </ResponsiveContainer>
           </div>
-          <div className="mt-2 flex gap-4 text-xs text-gray-500">
+          <div className="mt-2 flex gap-4 text-xs text-theme-muted">
             <span className="flex items-center gap-1">
               <span className="w-3 h-0.5 bg-emerald-500" /> Good: ≤0.1
             </span>
@@ -230,121 +210,35 @@ export function WebVitalsPage() {
         </Card>
       </div>
 
-      {/* By Device Type */}
+      {/* Additional Vitals */}
       <Card>
-        <SectionHeader title="Performance by Device" subtitle="Core Web Vitals breakdown" />
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="text-left text-xs text-gray-500 border-b border-gray-800">
-                <th className="pb-3 font-medium">Device</th>
-                <th className="pb-3 font-medium">Samples</th>
-                <th className="pb-3 font-medium">LCP (p75)</th>
-                <th className="pb-3 font-medium">FID (p75)</th>
-                <th className="pb-3 font-medium">CLS (p75)</th>
-                <th className="pb-3 font-medium">INP (p75)</th>
-                <th className="pb-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {deviceMetrics.map((d) => {
-                const lcpStatus = getVitalStatus(d.lcp, 'lcp')
-                const fidStatus = getVitalStatus(d.fid, 'fid')
-                const clsStatus = getVitalStatus(d.cls, 'cls')
-                const inpStatus = getVitalStatus(d.inp, 'inp')
-                
-                // Overall status is worst of all
-                const statuses = [lcpStatus, fidStatus, clsStatus, inpStatus]
-                const overallStatus = statuses.includes('critical')
-                  ? 'down'
-                  : statuses.includes('warning')
-                  ? 'degraded'
-                  : 'healthy'
-
-                return (
-                  <tr key={d.device} className="border-b border-gray-800/50">
-                    <td className="py-4">
-                      <div className="flex items-center gap-2 text-gray-300">
-                        <DeviceIcon type={d.device} />
-                        <span className="capitalize">{d.device}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 text-gray-400">{d.samples.toLocaleString()}</td>
-                    <td className="py-4">
-                      <span style={{ color: getVitalColor(lcpStatus) }}>
-                        {d.lcp.toFixed(0)}ms
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <span style={{ color: getVitalColor(fidStatus) }}>
-                        {d.fid.toFixed(0)}ms
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <span style={{ color: getVitalColor(clsStatus) }}>
-                        {d.cls.toFixed(3)}
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <span style={{ color: getVitalColor(inpStatus) }}>
-                        {d.inp.toFixed(0)}ms
-                      </span>
-                    </td>
-                    <td className="py-4">
-                      <StatusBadge status={overallStatus} />
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* By Page */}
-      <Card>
-        <SectionHeader title="Performance by Page" subtitle="Top pages by traffic" />
-        <div className="space-y-4">
-          {vitalsData?.slice(0, 6).map((v, i) => (
-            <div key={`${v.page_path}-${v.device_type}-${i}`} className="flex items-center gap-4">
-              <div className="w-48">
-                <div className="text-sm text-gray-300 truncate">{v.page_path}</div>
-                <div className="text-xs text-gray-500 flex items-center gap-1">
-                  <DeviceIcon type={v.device_type} />
-                  {v.device_type}
-                </div>
-              </div>
-              <div className="flex-1 grid grid-cols-4 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-500 text-xs">LCP</span>
-                  <div style={{ color: getVitalColor(getVitalStatus(v.p75_lcp_ms, 'lcp')) }}>
-                    {v.p75_lcp_ms.toFixed(0)}ms
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">FID</span>
-                  <div style={{ color: getVitalColor(getVitalStatus(v.p75_fid_ms, 'fid')) }}>
-                    {v.p75_fid_ms.toFixed(0)}ms
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">CLS</span>
-                  <div style={{ color: getVitalColor(getVitalStatus(v.p75_cls, 'cls')) }}>
-                    {v.p75_cls.toFixed(3)}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-gray-500 text-xs">INP</span>
-                  <div style={{ color: getVitalColor(getVitalStatus(v.p75_inp_ms, 'inp')) }}>
-                    {v.p75_inp_ms.toFixed(0)}ms
-                  </div>
-                </div>
-              </div>
-              <div className="text-xs text-gray-500">
-                {v.sample_count.toLocaleString()} samples
-              </div>
+        <SectionHeader title="Additional Metrics" subtitle="Other performance indicators" />
+        <div className="grid grid-cols-3 gap-6">
+          <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card-alt)' }}>
+            <div className="text-sm text-theme-muted mb-1">TTFB</div>
+            <div className="text-2xl font-bold" style={{ color: getVitalColor(getVitalStatus(vitals?.ttfb.value || 0, 'ttfb')) }}>
+              {vitals?.ttfb.value.toFixed(0)}ms
             </div>
-          ))}
+            <div className="text-xs text-theme-muted mt-1">Time to First Byte</div>
+          </div>
+          <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card-alt)' }}>
+            <div className="text-sm text-theme-muted mb-1">FCP</div>
+            <div className="text-2xl font-bold" style={{ color: getVitalColor(getVitalStatus(vitals?.fcp.value || 0, 'fcp')) }}>
+              {vitals?.fcp.value.toFixed(2)}s
+            </div>
+            <div className="text-xs text-theme-muted mt-1">First Contentful Paint</div>
+          </div>
+          <div className="p-4 rounded-lg" style={{ background: 'var(--bg-card-alt)' }}>
+            <div className="text-sm text-theme-muted mb-1">Overall</div>
+            <div className="text-2xl font-bold text-theme-primary">
+              <StatusBadge status={
+                (vitals?.lcp.value || 0) <= 2.5 && (vitals?.cls.value || 0) <= 0.1 && (vitals?.inp.value || 0) <= 200
+                  ? 'healthy'
+                  : 'degraded'
+              } />
+            </div>
+            <div className="text-xs text-theme-muted mt-1">Core Web Vitals</div>
+          </div>
         </div>
       </Card>
     </div>

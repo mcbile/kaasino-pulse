@@ -32,7 +32,7 @@ export function Sidebar({ currentPage, onNavigate }: SidebarProps) {
         <Zap className="text-emerald-500 mr-2" size={24} />
         <span className="text-xl font-bold">
           <span className="text-emerald-500">Pulse</span>
-          <span className="text-gray-400 text-sm ml-2">Kaasino</span>
+          <span className="text-gray-400 text-sm ml-2">Product</span>
         </span>
       </div>
 

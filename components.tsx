@@ -1,71 +1,5 @@
-import { ReactNode, useState } from 'react'
-import { TrendingUp, TrendingDown, Minus, Info } from 'lucide-react'
-
-// ============================================
-// METRIC TOOLTIP
-// ============================================
-
-interface MetricTooltipProps {
-  content: string
-  thresholds?: {
-    good?: string
-    warning?: string
-    critical?: string
-  }
-}
-
-export function MetricTooltip({ content, thresholds }: MetricTooltipProps) {
-  const [isVisible, setIsVisible] = useState(false)
-
-  return (
-    <div className="relative inline-flex">
-      <button
-        className="p-1 rounded-full hover:bg-[var(--bg-card-alt)] transition-colors"
-        onMouseEnter={() => setIsVisible(true)}
-        onMouseLeave={() => setIsVisible(false)}
-        onClick={() => setIsVisible(!isVisible)}
-      >
-        <Info size={14} className="text-theme-muted" />
-      </button>
-      {isVisible && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-3 rounded-lg shadow-lg border border-theme"
-          style={{ background: 'var(--bg-card)' }}
-        >
-          <p className="text-sm text-theme-secondary mb-2">{content}</p>
-          {thresholds && (
-            <div className="space-y-1 pt-2 border-t border-theme">
-              {thresholds.good && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-green-500" />
-                  <span className="text-theme-muted">Good:</span>
-                  <span className="text-theme-secondary">{thresholds.good}</span>
-                </div>
-              )}
-              {thresholds.warning && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span className="text-theme-muted">Warning:</span>
-                  <span className="text-theme-secondary">{thresholds.warning}</span>
-                </div>
-              )}
-              {thresholds.critical && (
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-red-500" />
-                  <span className="text-theme-muted">Critical:</span>
-                  <span className="text-theme-secondary">{thresholds.critical}</span>
-                </div>
-              )}
-            </div>
-          )}
-          {/* Arrow */}
-          <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent"
-            style={{ borderTopColor: 'var(--border-color)' }}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
+import { ReactNode } from 'react'
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 
 // ============================================
 // METRIC CARD
@@ -77,15 +11,8 @@ interface MetricCardProps {
   subtitle?: string
   trend?: number
   trendLabel?: string
-  change?: number
   icon?: ReactNode
   status?: 'good' | 'warning' | 'critical' | 'neutral'
-  tooltip?: string
-  thresholds?: {
-    good?: string
-    warning?: string
-    critical?: string
-  }
 }
 
 export function MetricCard({
@@ -94,11 +21,8 @@ export function MetricCard({
   subtitle,
   trend,
   trendLabel,
-  change,
   icon,
   status = 'neutral',
-  tooltip,
-  thresholds,
 }: MetricCardProps) {
   const statusStyles = {
     good: 'text-[#22c55e]',
@@ -107,18 +31,13 @@ export function MetricCard({
     neutral: 'text-theme-primary',
   }
 
-  // Support both trend and change props
-  const trendValue = trend ?? change
-  const TrendIcon = trendValue && trendValue > 0 ? TrendingUp : trendValue && trendValue < 0 ? TrendingDown : Minus
-  const trendColor = trendValue && trendValue > 0 ? 'text-[#22c55e]' : trendValue && trendValue < 0 ? 'text-[var(--gradient-4)]' : 'text-theme-muted'
+  const TrendIcon = trend && trend > 0 ? TrendingUp : trend && trend < 0 ? TrendingDown : Minus
+  const trendColor = trend && trend > 0 ? 'text-[#22c55e]' : trend && trend < 0 ? 'text-[var(--gradient-4)]' : 'text-theme-muted'
 
   return (
     <div className="card p-5 card-hover">
       <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-1">
-          <span className="text-sm text-theme-muted font-medium">{title}</span>
-          {tooltip && <MetricTooltip content={tooltip} thresholds={thresholds} />}
-        </div>
+        <span className="text-sm text-theme-muted font-medium">{title}</span>
         {icon && <span className={statusStyles[status]}>{icon}</span>}
       </div>
 
@@ -132,10 +51,10 @@ export function MetricCard({
           )}
         </div>
 
-        {trendValue !== undefined && (
+        {trend !== undefined && (
           <div className={`flex items-center gap-1 text-xs ${trendColor}`}>
             <TrendIcon size={14} />
-            <span>{Math.abs(trendValue).toFixed(1)}%</span>
+            <span>{Math.abs(trend).toFixed(1)}%</span>
             {trendLabel && <span className="text-theme-muted">{trendLabel}</span>}
           </div>
         )}
@@ -149,31 +68,23 @@ export function MetricCard({
 // ============================================
 
 interface StatusBadgeProps {
-  status: 'healthy' | 'degraded' | 'down' | 'unknown' | 'good' | 'warning' | 'critical' | 'info'
+  status: 'healthy' | 'degraded' | 'down' | 'unknown'
   label?: string
 }
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {
-  const styles: Record<string, string> = {
+  const styles = {
     healthy: 'badge-success',
-    good: 'badge-success',
     degraded: 'badge-warning',
-    warning: 'badge-warning',
     down: 'badge-error',
-    critical: 'badge-error',
     unknown: 'badge-info',
-    info: 'badge-info',
   }
 
-  const labels: Record<string, string> = {
+  const labels = {
     healthy: 'Healthy',
-    good: 'Good',
     degraded: 'Degraded',
-    warning: 'Warning',
     down: 'Down',
-    critical: 'Critical',
     unknown: 'Unknown',
-    info: 'Info',
   }
 
   return (
@@ -190,7 +101,7 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
 interface ProgressBarProps {
   value: number
   max?: number
-  color?: 'brand' | 'success' | 'warning' | 'accent' | 'emerald' | 'amber' | 'red' | 'blue' | 'green' | 'yellow'
+  color?: 'brand' | 'success' | 'warning' | 'accent'
   size?: 'sm' | 'md'
   showLabel?: boolean
 }
@@ -204,17 +115,11 @@ export function ProgressBar({
 }: ProgressBarProps) {
   const percentage = Math.min((value / max) * 100, 100)
 
-  const colorClasses: Record<string, string> = {
+  const colorClasses = {
     brand: 'progress-bar-fill-brand',
     success: 'progress-bar-fill-success',
-    emerald: 'progress-bar-fill-success',
-    green: 'progress-bar-fill-success',
     warning: 'progress-bar-fill-warning',
-    amber: 'progress-bar-fill-warning',
-    yellow: 'progress-bar-fill-warning',
     accent: 'progress-bar-fill-accent',
-    blue: 'progress-bar-fill-accent',
-    red: 'progress-bar-fill-brand',
   }
 
   const heights = {
@@ -224,9 +129,9 @@ export function ProgressBar({
 
   return (
     <div className="flex items-center gap-2">
-      <div className={`progress-bar ${heights[size]} flex-1`}>
+      <div className={`progress-bar ${heights[size]}`}>
         <div
-          className={`progress-bar-fill ${colorClasses[color] || colorClasses.brand}`}
+          className={`progress-bar-fill ${colorClasses[color]}`}
           style={{ width: `${percentage}%` }}
         />
       </div>
