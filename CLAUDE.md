@@ -253,8 +253,8 @@ pkg/
 
 | Метод | Описание |
 |-------|----------|
-| Email + пароль | `michael@starcrown.partners` / `Pulse4me!` |
-| Nickname + пароль | `mcbile` / `Pulse4me!` |
+| Email + пароль | Настраивается через `ADMIN_USERS` env |
+| Nickname + пароль | Настраивается через `ADMIN_USERS` env |
 | Google OAuth | Для @starcrown.partners emails |
 
 ### Environment Variables (Auth)
@@ -264,9 +264,10 @@ pkg/
 | `ADMIN_USERS` | — | Формат: `email:hash:name:nickname,email2:...` |
 
 ### Default Super Admin
-- **Email**: `michael@starcrown.partners`
-- **Nickname**: `McBile`
-- **Password**: `Pulse4me!`
+Настраивается через переменную окружения `ADMIN_USERS`.
+Формат: `email:password_hash:name:nickname`
+
+См. `.env.example` для примера.
 
 ---
 

@@ -124,9 +124,11 @@ cp .env.example .env
 
 Три способа входа:
 
-1. **Email + пароль** — `michael@starcrown.partners` / `Pulse4me!`
-2. **Nickname + пароль** — `mcbile` / `Pulse4me!`
+1. **Email + пароль** — настраивается через `ADMIN_USERS` env
+2. **Nickname + пароль** — настраивается через `ADMIN_USERS` env
 3. **Google OAuth** — для @starcrown.partners emails
+
+> См. `.env.example` для примера конфигурации.
 
 ### Как добавить нового пользователя?
 

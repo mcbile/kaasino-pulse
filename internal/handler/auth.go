@@ -80,21 +80,13 @@ func NewAuthHandler(origins []string) *AuthHandler {
 
 // loadAdminUsers loads admin credentials from environment variables
 // Format: ADMIN_USERS=email1:hash:name:nickname,email2:hash:name:nickname
+//
+// To generate password hash:
+//   echo -n "YourPassword" | sha256sum | cut -d' ' -f1
 func (h *AuthHandler) loadAdminUsers() {
-	// Default admin (password hash for "Pulse4me!" using SHA256)
-	// In production, use bcrypt instead
-	defaultHash := hashPassword("Pulse4me!")
-
-	// Check for environment override
 	adminConfig := os.Getenv("ADMIN_USERS")
 	if adminConfig == "" {
-		// Default admin
-		h.adminUsers["michael@starcrown.partners"] = AdminUser{
-			PasswordHash: defaultHash,
-			Name:         "Michael",
-			Nickname:     "McBile",
-		}
-		slog.Info("loaded default admin user", "email", "michael@starcrown.partners")
+		slog.Warn("ADMIN_USERS not set - password login disabled, only Google OAuth available")
 		return
 	}
 
@@ -103,7 +95,7 @@ func (h *AuthHandler) loadAdminUsers() {
 	for _, u := range users {
 		parts := strings.Split(u, ":")
 		if len(parts) != 4 {
-			slog.Warn("invalid admin user format", "value", u)
+			slog.Warn("invalid admin user format, expected email:hash:name:nickname", "value", u)
 			continue
 		}
 		email := strings.ToLower(strings.TrimSpace(parts[0]))
@@ -113,6 +105,10 @@ func (h *AuthHandler) loadAdminUsers() {
 			Nickname:     parts[3],
 		}
 		slog.Info("loaded admin user", "email", email)
+	}
+
+	if len(h.adminUsers) == 0 {
+		slog.Warn("no valid admin users loaded from ADMIN_USERS")
 	}
 }
 
